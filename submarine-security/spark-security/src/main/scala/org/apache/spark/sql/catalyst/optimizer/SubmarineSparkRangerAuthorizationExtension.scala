@@ -20,6 +20,7 @@
 package org.apache.spark.sql.catalyst.optimizer
 
 import org.apache.commons.logging.LogFactory
+import org.apache.hive.service.cli.session.SessionManager
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.plans.logical.{CacheTable, Command, LogicalPlan, UncacheTable}
 import org.apache.spark.sql.catalyst.rules.Rule
@@ -29,7 +30,7 @@ import org.apache.spark.sql.execution.{SubmarineShowDatabasesCommand, SubmarineS
 import org.apache.spark.sql.hive.PrivilegesBuilder
 import org.apache.spark.sql.hive.execution.CreateHiveTableAsSelectCommand
 import org.apache.submarine.spark.compatible.CompatibleCommand._
-import org.apache.submarine.spark.security.{RangerSparkAuthorizer, SparkAccessControlException}
+import org.apache.submarine.spark.security.SparkAccessControlException
 
 /**
  * An Optimizer Rule to do SQL standard ACL for Spark SQL.
@@ -53,17 +54,24 @@ case class SubmarineSparkRangerAuthorizationExtension(spark: SparkSession)
    * @return a plan itself which has gone through the privilege check.
    */
   override def apply(plan: LogicalPlan): LogicalPlan = {
+    val username = SessionManager.getUserName
+    val allowedDatabases = username.split("\\$").map(_.trim).map(_.toLowerCase)
+    LOG.info("allowed databases is " + allowedDatabases.mkString(","))
     plan match {
-      case s: ShowDatabasesCommandCompatible => SubmarineShowDatabasesCommand(s)
-      case s: SubmarineShowDatabasesCommand => s
-      case s: ShowTablesCommand => SubmarineShowTablesCommand(s)
-      case s: SubmarineShowTablesCommand => s
-      case ResetCommand(_) => SubmarineResetCommand
+      case s: ShowDatabasesCommandCompatible => SubmarineShowDatabasesCommand(s, allowedDatabases)
+      case s: SubmarineShowDatabasesCommand => s // why is this listed twice? ans: because optimiser's run multiple times
+      case s: ShowTablesCommand => SubmarineShowTablesCommand(s, allowedDatabases)
+      case s: SubmarineShowTablesCommand => s // why is this listed twice? ans: because optimiser's run multiple times
       case _ =>
-        val operationType: SparkOperationType = toOperationType(plan)
+        // val operationType: SparkOperationType = toOperationType(plan)
         val (in, out) = PrivilegesBuilder.build(plan)
         try {
-          RangerSparkAuthorizer.checkPrivileges(spark, operationType, in, out)
+          val usedDatabases = in.map(obj => obj.getDbname)
+          val allowedOperation = usedDatabases.forall(allowedDatabases.contains(_))
+          if (!allowedOperation) {
+            throw new SparkAccessControlException(s"$usedDatabases should be subset of $allowedDatabases")
+          }
+          // RangerSparkAuthorizer.checkPrivileges(spark, operationType, in, out)
           plan
         } catch {
           case ace: SparkAccessControlException =>

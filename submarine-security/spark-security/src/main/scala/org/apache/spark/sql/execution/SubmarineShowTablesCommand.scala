@@ -19,17 +19,30 @@
 
 package org.apache.spark.sql.execution
 
+import org.apache.hive.service.cli.session.SessionManager
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.execution.command.{LeafRunnableCommand, ShowTablesCommand}
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.submarine.spark.security.{RangerSparkAuthorizer, SparkPrivilegeObject, SparkPrivilegeObjectType}
+import org.apache.submarine.spark.security.{SparkAccessControlException, SparkPrivilegeObject, SparkPrivilegeObjectType}
 
-case class SubmarineShowTablesCommand(child: ShowTablesCommand) extends LeafRunnableCommand {
+case class SubmarineShowTablesCommand(child: ShowTablesCommand, allowedDatabases: Array[String]) extends LeafRunnableCommand {
 
   override val output: Seq[Attribute] = child.output
+
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val rows = child.run(sparkSession)
-    rows.filter(r => RangerSparkAuthorizer.isAllowed(toSparkPrivilegeObject(r)))
+    val selectedDatabase = if (child.databaseName.isDefined) {
+      child.databaseName.get
+    } else {
+      sparkSession.sessionState.catalog.getCurrentDatabase
+    }
+
+    if (!allowedDatabases.contains(selectedDatabase)) {
+      throw new SparkAccessControlException(s"$selectedDatabase is not part of ${allowedDatabases.mkString(",")}");
+    } else {
+      val rows = child.run(sparkSession)
+      rows.filter(r => allowedDatabases.contains(r.getString(0)))
+    }
+    //    rows.filter(r => RangerSparkAuthorizer.isAllowed(toSparkPrivilegeObject(r)))
   }
 
   private def toSparkPrivilegeObject(row: Row): SparkPrivilegeObject = {

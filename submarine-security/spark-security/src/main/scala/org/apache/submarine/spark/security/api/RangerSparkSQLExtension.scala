@@ -20,17 +20,15 @@
 package org.apache.submarine.spark.security.api
 
 import org.apache.spark.sql.SparkSessionExtensions
-import org.apache.spark.sql.catalyst.optimizer.{SubmarineConfigurationCheckExtension, SubmarineDataMaskingExtension, SubmarinePushPredicatesThroughExtensions, SubmarineRowFilterExtension, SubmarineSparkRangerAuthorizationExtension}
-import org.apache.spark.sql.execution.SubmarineSparkPlanOmitStrategy
-
+import org.apache.spark.sql.catalyst.optimizer._
 import org.apache.submarine.spark.security.Extensions
 
 /**
  * ACL Management for Apache Spark SQL with Apache Ranger, enabling:
  * <ul>
- *   <li>Table/Column level authorization</li>
- *   <li>Row level filtering</li>
- *   <li>Data masking</li>
+ * <li>Table/Column level authorization</li>
+ * <li>Row level filtering</li>
+ * <li>Data masking</li>
  * <ul>
  *
  * To work with Spark SQL, we need to enable it via spark extensions
@@ -41,9 +39,9 @@ class RangerSparkSQLExtension extends Extensions {
   override def apply(ext: SparkSessionExtensions): Unit = {
     ext.injectCheckRule(SubmarineConfigurationCheckExtension)
     ext.injectOptimizerRule(SubmarineSparkRangerAuthorizationExtension)
-    ext.injectOptimizerRule(SubmarineRowFilterExtension)
-    ext.injectOptimizerRule(SubmarineDataMaskingExtension)
-    ext.injectOptimizerRule(SubmarinePushPredicatesThroughExtensions)
-    ext.injectPlannerStrategy(SubmarineSparkPlanOmitStrategy)
+    //    ext.injectOptimizerRule(SubmarineRowFilterExtension)
+    //    ext.injectOptimizerRule(SubmarineDataMaskingExtension)
+    //    ext.injectOptimizerRule(SubmarinePushPredicatesThroughExtensions)
+    //    ext.injectPlannerStrategy(SubmarineSparkPlanOmitStrategy)
   }
 }

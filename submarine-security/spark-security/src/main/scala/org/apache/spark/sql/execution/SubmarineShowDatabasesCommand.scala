@@ -23,9 +23,9 @@ import org.apache.spark.sql.execution.command.LeafRunnableCommand
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.submarine.spark.compatible.CompatibleCommand.ShowDatabasesCommandCompatible
 import org.apache.submarine.spark.compatible.CompatibleFunc
-import org.apache.submarine.spark.security.{RangerSparkAuthorizer, SparkPrivilegeObject, SparkPrivilegeObjectType}
+import org.apache.submarine.spark.security.{SparkPrivilegeObject, SparkPrivilegeObjectType}
 
-case class SubmarineShowDatabasesCommand(child: ShowDatabasesCommandCompatible)
+case class SubmarineShowDatabasesCommand(child: ShowDatabasesCommandCompatible, allowedDatabases: Array[String])
   extends LeafRunnableCommand {
   override val output = child.output
 
@@ -34,7 +34,10 @@ case class SubmarineShowDatabasesCommand(child: ShowDatabasesCommandCompatible)
     val databases = CompatibleFunc.getPattern(child)
       .map(catalog.listDatabases).getOrElse(catalog.listDatabases()).map { d => Row(d) }
 
-    databases.filter(r => RangerSparkAuthorizer.isAllowed(toSparkPrivilegeObject(r)))
+    val filteredDatabases = databases.filter(r => allowedDatabases.contains(r.getString(0)))
+    filteredDatabases.foreach(o => println("NFER: " + o.getString(0)))
+    filteredDatabases
+    //    databases.filter(r => RangerSparkAuthorizer.isAllowed(toSparkPrivilegeObject(r)))
   }
 
   private def toSparkPrivilegeObject(row: Row): SparkPrivilegeObject = {
