@@ -77,17 +77,19 @@ private[sql] object PrivilegesBuilder {
 
   /**
    * Build SparkPrivilegeObjects from Spark LogicalPlan
-   * @param plan a Spark LogicalPlan used to generate SparkPrivilegeObjects
+   *
+   * @param plan             a Spark LogicalPlan used to generate SparkPrivilegeObjects
    * @param privilegeObjects input or output spark privilege object list
-   * @param projectionList Projection list after pruning
+   * @param projectionList   Projection list after pruning
    */
   private def buildQuery(
-       plan: LogicalPlan,
-       privilegeObjects: ArrayBuffer[SparkPrivilegeObject],
-       projectionList: Seq[NamedExpression] = Nil): Unit = {
+                          plan: LogicalPlan,
+                          privilegeObjects: ArrayBuffer[SparkPrivilegeObject],
+                          projectionList: Seq[NamedExpression] = Nil): Unit = {
 
     /**
      * Columns in Projection take priority for column level privilege checking
+     *
      * @param table catalogTable of a given relation
      */
     def mergeProjection(table: CatalogTable): Unit = {
@@ -133,14 +135,15 @@ private[sql] object PrivilegesBuilder {
 
   /**
    * Build SparkPrivilegeObjects from Spark LogicalPlan
-   * @param plan a Spark LogicalPlan used to generate SparkPrivilegeObjects
-   * @param inputObjs input spark privilege object list
+   *
+   * @param plan       a Spark LogicalPlan used to generate SparkPrivilegeObjects
+   * @param inputObjs  input spark privilege object list
    * @param outputObjs output spark privilege object list
    */
   private def buildCommand(
-      plan: LogicalPlan,
-      inputObjs: ArrayBuffer[SparkPrivilegeObject],
-      outputObjs: ArrayBuffer[SparkPrivilegeObject]): Unit = {
+                            plan: LogicalPlan,
+                            inputObjs: ArrayBuffer[SparkPrivilegeObject],
+                            outputObjs: ArrayBuffer[SparkPrivilegeObject]): Unit = {
     plan match {
       case a: AlterDatabasePropertiesCommand => addDbLevelObjs(a.databaseName, outputObjs)
 
@@ -220,7 +223,7 @@ private[sql] object PrivilegesBuilder {
         addTableOrViewLevelObjs(a.tableIdent, inputObjs, columns = Seq("RAW__DATA__SIZE"))
         addTableOrViewLevelObjs(a.tableIdent, outputObjs)
 
-//      case c: CacheTableCommand => c.plan.foreach {
+      //      case c: CacheTableCommand => c.plan.foreach {
       //        buildQuery(_, inputObjs)
       //      }
 
@@ -296,7 +299,7 @@ private[sql] object PrivilegesBuilder {
         }
         buildQuery(i.query, inputObjs)
 
-      case i if i.nodeName =="InsertIntoDataSourceDirCommand" =>
+      case i if i.nodeName == "InsertIntoDataSourceDirCommand" =>
         buildQuery(getFieldVal(i, "query").asInstanceOf[LogicalPlan], inputObjs)
 
       case i: InsertIntoHadoopFsRelationCommand =>
@@ -332,7 +335,7 @@ private[sql] object PrivilegesBuilder {
         buildQuery(getFieldVal(s, "query").asInstanceOf[LogicalPlan], outputObjs)
 
       case s: SetDatabaseCommandCompatible =>
-        addDbLevelObjs(CompatibleFunc.getCatLogName(s), inputObjs)
+        addDbLevelObjs(s.namespace.get.head, inputObjs) // changing this to namespace
 
       case s: ShowColumnsCommand => addTableOrViewLevelObjs(s.tableName, inputObjs)
 
@@ -368,23 +371,25 @@ private[sql] object PrivilegesBuilder {
 
   /**
    * Add database level spark privilege objects to input or output list
-   * @param dbName database name as spark privilege object
+   *
+   * @param dbName           database name as spark privilege object
    * @param privilegeObjects input or output list
    */
   private def addDbLevelObjs(
-      dbName: String,
-      privilegeObjects: ArrayBuffer[SparkPrivilegeObject]): Unit = {
+                              dbName: String,
+                              privilegeObjects: ArrayBuffer[SparkPrivilegeObject]): Unit = {
     privilegeObjects += new SparkPrivilegeObject(SparkPrivilegeObjectType.DATABASE, dbName, dbName)
   }
 
   /**
    * Add database level spark privilege objects to input or output list
-   * @param dbOption an option of database name as spark privilege object
+   *
+   * @param dbOption         an option of database name as spark privilege object
    * @param privilegeObjects input or output spark privilege object list
    */
   private def addDbLevelObjs(
-      dbOption: Option[String],
-      privilegeObjects: ArrayBuffer[SparkPrivilegeObject]): Unit = {
+                              dbOption: Option[String],
+                              privilegeObjects: ArrayBuffer[SparkPrivilegeObject]): Unit = {
     dbOption match {
       case Some(db) =>
         privilegeObjects += new SparkPrivilegeObject(SparkPrivilegeObjectType.DATABASE, db, db)
@@ -394,12 +399,13 @@ private[sql] object PrivilegesBuilder {
 
   /**
    * Add database level spark privilege objects to input or output list
-   * @param identifier table identifier contains database name as hive privilege object
+   *
+   * @param identifier       table identifier contains database name as hive privilege object
    * @param privilegeObjects input or output spark privilege object list
    */
   private def addDbLevelObjs(
-      identifier: TableIdentifier,
-      privilegeObjects: ArrayBuffer[SparkPrivilegeObject]): Unit = {
+                              identifier: TableIdentifier,
+                              privilegeObjects: ArrayBuffer[SparkPrivilegeObject]): Unit = {
     identifier.database match {
       case Some(db) =>
         privilegeObjects += new SparkPrivilegeObject(SparkPrivilegeObjectType.DATABASE, db, db)
@@ -409,14 +415,15 @@ private[sql] object PrivilegesBuilder {
 
   /**
    * Add function level spark privilege objects to input or output list
-   * @param databaseName database name
-   * @param functionName function name as spark privilege object
+   *
+   * @param databaseName     database name
+   * @param functionName     function name as spark privilege object
    * @param privilegeObjects input or output list
    */
   private def addFunctionLevelObjs(
-      databaseName: Option[String],
-      functionName: String,
-      privilegeObjects: ArrayBuffer[SparkPrivilegeObject]): Unit = {
+                                    databaseName: Option[String],
+                                    functionName: String,
+                                    privilegeObjects: ArrayBuffer[SparkPrivilegeObject]): Unit = {
     databaseName match {
       case Some(db) =>
         privilegeObjects += new SparkPrivilegeObject(
@@ -427,16 +434,17 @@ private[sql] object PrivilegesBuilder {
 
   /**
    * Add table level spark privilege objects to input or output list
-   * @param identifier table identifier contains database name, and table name as hive
-   *                        privilege object
+   *
+   * @param identifier       table identifier contains database name, and table name as hive
+   *                         privilege object
    * @param privilegeObjects input or output list
-   * @param mode Append or overwrite
+   * @param mode             Append or overwrite
    */
   private def addTableOrViewLevelObjs(
-      identifier: TableIdentifier,
-      privilegeObjects: ArrayBuffer[SparkPrivilegeObject],
-      partKeys: Seq[String] = Nil,
-      columns: Seq[String] = Nil, mode: SaveMode = SaveMode.ErrorIfExists): Unit = {
+                                       identifier: TableIdentifier,
+                                       privilegeObjects: ArrayBuffer[SparkPrivilegeObject],
+                                       partKeys: Seq[String] = Nil,
+                                       columns: Seq[String] = Nil, mode: SaveMode = SaveMode.ErrorIfExists): Unit = {
     identifier.database match {
       case Some(db) =>
         val tbName = identifier.table

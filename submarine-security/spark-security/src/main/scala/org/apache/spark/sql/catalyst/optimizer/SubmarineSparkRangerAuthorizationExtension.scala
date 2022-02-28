@@ -30,7 +30,7 @@ import org.apache.spark.sql.execution.{SubmarineShowDatabasesCommand, SubmarineS
 import org.apache.spark.sql.hive.PrivilegesBuilder
 import org.apache.spark.sql.hive.execution.CreateHiveTableAsSelectCommand
 import org.apache.submarine.spark.compatible.CompatibleCommand._
-import org.apache.submarine.spark.security.SparkAccessControlException
+import org.apache.submarine.spark.security.{SparkAccessControlException, SparkPrivilegeObject}
 
 /**
  * An Optimizer Rule to do SQL standard ACL for Spark SQL.
@@ -66,11 +66,8 @@ case class SubmarineSparkRangerAuthorizationExtension(spark: SparkSession)
         // val operationType: SparkOperationType = toOperationType(plan)
         val (in, out) = PrivilegesBuilder.build(plan)
         try {
-          val usedDatabases = in.map(obj => obj.getDbname)
-          val allowedOperation = usedDatabases.forall(allowedDatabases.contains(_))
-          if (!allowedOperation) {
-            throw new SparkAccessControlException(s"$usedDatabases should be subset of $allowedDatabases")
-          }
+          this.CheckAuth(in, allowedDatabases)
+          this.CheckAuth(out, allowedDatabases) // this will enable us to do ACL for `USE Statement`
           // RangerSparkAuthorizer.checkPrivileges(spark, operationType, in, out)
           plan
         } catch {
@@ -87,6 +84,14 @@ case class SubmarineSparkRangerAuthorizationExtension(spark: SparkSession)
                """.stripMargin)
             throw ace
         }
+    }
+  }
+
+  def CheckAuth(privilegeObjects: Seq[SparkPrivilegeObject], allowedDatabases: Array[String]): Unit = {
+    val usedDatabases = privilegeObjects.map(obj => obj.getDbname)
+    val allowedOperation = usedDatabases.forall(allowedDatabases.contains(_))
+    if (!allowedOperation) {
+      throw new SparkAccessControlException(s"$usedDatabases should be subset of ${allowedDatabases.mkString(",")}")
     }
   }
 
